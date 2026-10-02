@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Social Media Sentiment Analyzer</title>
+<style>
+  :root{--bg:#f4f6fb;--card:#fff;--ink:#1d2433;--muted:#667085;--pos:#2e9e5b;--neu:#e0a800;--neg:#d64545;--accent:#3b5bdb}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--accent);color:#fff;padding:22px 16px;text-align:center}
+  header h1{margin:0;font-size:1.5rem} header p{margin:6px 0 0;opacity:.9;font-size:.95rem}
+  main{max-width:860px;margin:24px auto;padding:0 16px}
+  .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:18px}
+  textarea{width:100%;min-height:130px;padding:12px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;resize:vertical}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 20px;font-size:1rem;cursor:pointer;margin-top:10px}
+  button.secondary{background:#e8ecf8;color:var(--accent);margin-left:8px}
+  .hint{color:var(--muted);font-size:.85rem;margin:6px 0 0}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .stat{flex:1;min-width:120px;text-align:center;padding:12px;border-radius:10px;color:#fff;font-weight:600}
+  .stat span{display:block;font-size:1.8rem}
+  .Positive{background:var(--pos)} .Neutral{background:var(--neu)} .Negative{background:var(--neg)}
+  .bar{display:flex;height:18px;border-radius:9px;overflow:hidden;margin:14px 0 4px;background:#eee}
+  .item{border-left:6px solid;padding:8px 12px;margin:8px 0;background:#fafbff;border-radius:6px}
+  .item.Positive{border-color:var(--pos);background:#f1faf5;color:var(--ink)}
+  .item.Neutral{border-color:var(--neu);background:#fffbef;color:var(--ink)}
+  .item.Negative{border-color:var(--neg);background:#fdf3f3;color:var(--ink)}
+  .item small{color:var(--muted)} .err{color:var(--neg)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Social Media Sentiment Analyzer</h1>
+  <p>NLP preprocessing + TF-IDF + Support Vector Machine</p>
+</header>
+<main>
+  <div class="card">
+    <label for="posts"><b>Enter one or more posts</b> (one post per line)</label>
+    <textarea id="posts" placeholder="I love this new phone! The camera is amazing&#10;Feeling sad and tired today&#10;The event is tomorrow at 5 pm"></textarea>
+    <p class="hint">Tweets, comments or reviews. URLs, @mentions, #hashtags and emojis are cleaned automatically.</p>
+    <button id="go">Analyze</button>
+    <button id="demo" class="secondary" type="button">Load examples</button>
+    <p id="error" class="err"></p>
+  </div>
+  <div id="out" class="card" style="display:none">
+    <h3 style="margin-top:0">Summary</h3>
+    <div class="row">
+      <div class="stat Positive"><span id="cPos">0</span>Positive</div>
+      <div class="stat Neutral"><span id="cNeu">0</span>Neutral</div>
+      <div class="stat Negative"><span id="cNeg">0</span>Negative</div>
+    </div>
+    <div class="bar"><div id="bPos" class="Positive"></div><div id="bNeu" class="Neutral"></div><div id="bNeg" class="Negative"></div></div>
+    <h3>Details</h3>
+    <div id="list"></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+$('demo').onclick = () => {
+  $('posts').value = ["I love this new phone! The camera is amazing 😍",
+    "Feeling sad and tired today 😢",
+    "The concert last night was awesome and fun!",
+    "The update is bad and made everything worse",
+    "The store opens at nine and closes at five",
+    "@support my order never arrived, worst service ever"].join("\n");
+};
+$('go').onclick = async () => {
+  $('error').textContent = '';
+  const posts = $('posts').value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!posts.length) { $('error').textContent = 'Please enter at least one post.'; return; }
+  try {
+    const res = await fetch('/api/predict', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({posts})});
+    const data = await res.json();
+    if (!res.ok) { $('error').textContent = data.error || 'Something went wrong.'; return; }
+    const s = data.summary, t = data.total;
+    $('cPos').textContent = s.Positive; $('cNeu').textContent = s.Neutral; $('cNeg').textContent = s.Negative;
+    $('bPos').style.width = (100*s.Positive/t)+'%'; $('bNeu').style.width = (100*s.Neutral/t)+'%'; $('bNeg').style.width = (100*s.Negative/t)+'%';
+    $('list').innerHTML = data.results.map(r =>
+      `<div class="item ${r.sentiment}"><b>${r.sentiment} ${r.emoji}</b> <small>confidence ${(r.confidence*100).toFixed(0)}%</small><br>${esc(r.text)}</div>`).join('');
+    $('out').style.display = 'block';
+  } catch (e) { $('error').textContent = 'Could not reach the server: ' + e; }
+};
+</script>
+</body>
+</html>
